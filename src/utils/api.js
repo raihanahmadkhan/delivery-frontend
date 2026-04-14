@@ -1,8 +1,8 @@
 import axios from 'axios'
 
-// Normalise the base URL so both forms work:
-//   https://your-backend.onrender.com       → appends /api
-//   https://your-backend.onrender.com/api   → used as-is
+
+
+
 const _raw = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
 const BASE_URL = _raw ? (_raw.endsWith('/api') ? _raw : `${_raw}/api`) : '/api'
 

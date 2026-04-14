@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// 50 major Indian cities with state info and real coordinates
+
 const INDIAN_CITIES = [
   { name: 'Mumbai',           state: 'Maharashtra',    lat: 19.0760, lon: 72.8777 },
   { name: 'Delhi',            state: 'Delhi',          lat: 28.7041, lon: 77.1025 },
@@ -86,7 +86,7 @@ export default function LocationSearchBar({ onSelect }) {
       return
     }
 
-    // Instant local results
+    
     const lower = trimmed.toLowerCase()
     const local = INDIAN_CITIES
       .filter(c =>
@@ -101,7 +101,7 @@ export default function LocationSearchBar({ onSelect }) {
     setOpen(local.length > 0)
     setActiveIdx(-1)
 
-    // Nominatim geocoding for anything beyond the local list
+    
     clearTimeout(debounceId.current)
     debounceId.current = setTimeout(async () => {
       try {
@@ -109,8 +109,9 @@ export default function LocationSearchBar({ onSelect }) {
         const url =
           `https://nominatim.openstreetmap.org/search` +
           `?q=${encodeURIComponent(trimmed)}` +
-          `&countrycodes=in&format=json&limit=4&addressdetails=1`
-        const res  = await fetch(url, { headers: { 'Accept-Language': 'en-IN,en' } })
+          `&format=json&limit=6&addressdetails=1` +
+          `&viewbox=68.1,35.5,97.4,6.7` 
+        const res  = await fetch(url, { headers: { 'Accept-Language': 'en-US,en;q=0.9' } })
         const data = await res.json()
 
         const remote = data
@@ -118,17 +119,17 @@ export default function LocationSearchBar({ onSelect }) {
           .map(d => {
             const parts    = d.display_name.split(',').map(s => s.trim())
             const cityName = d.name || parts[0]
-            const state    = d.address?.state || parts[parts.length - 2] || 'India'
+            const addrRegion = d.address?.state || d.address?.country || parts[parts.length - 1] || ''
             return {
               name:    cityName,
-              state,
+              state:   addrRegion,
               lat:     parseFloat(d.lat),
               lon:     parseFloat(d.lon),
               display: d.display_name,
               source:  'nominatim',
             }
           })
-          .slice(0, 3)
+          .slice(0, 5)
 
         setSuggestions(prev => {
           const localNames = new Set(prev.map(p => p.name.toLowerCase()))
@@ -137,7 +138,7 @@ export default function LocationSearchBar({ onSelect }) {
         })
         setOpen(true)
       } catch {
-        // Nominatim unavailable — local results still shown
+        
       } finally {
         setFetching(false)
       }
@@ -255,7 +256,7 @@ export default function LocationSearchBar({ onSelect }) {
                     {city.source === 'local' ? '🏙' : '📍'}
                   </span>
 
-                  {/* Text */}
+                  {}
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-medium leading-tight truncate">
                       {city.name}
@@ -267,7 +268,7 @@ export default function LocationSearchBar({ onSelect }) {
                     </span>
                   </span>
 
-                  {/* Coords */}
+                  {}
                   <span className="shrink-0 text-[10px] text-slate-600 font-mono">
                     {city.lat.toFixed(2)}°
                   </span>
@@ -276,7 +277,7 @@ export default function LocationSearchBar({ onSelect }) {
             ))}
           </ul>
 
-          {/* Footer hint */}
+          {}
           <div className="px-3 py-1.5 border-t border-slate-800 flex items-center justify-between">
             <span className="text-[10px] text-slate-600">Click to add as route point</span>
             <span className="text-[10px] text-slate-700">↑↓ · Enter · Esc</span>
@@ -284,7 +285,7 @@ export default function LocationSearchBar({ onSelect }) {
         </div>
       )}
 
-      {/* Empty state when query entered but no results yet */}
+      {}
       {open && suggestions.length === 0 && query.trim() && !fetching && (
         <div className="absolute top-full mt-1.5 w-full
                         bg-slate-900/98 border border-slate-700 rounded-xl shadow-xl px-4 py-3">

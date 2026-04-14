@@ -1,6 +1,6 @@
 
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import FileUpload from './FileUpload'
 
 
@@ -66,10 +66,10 @@ const ALGO_INFO = {
 }
 
 const PRESETS = [
+  { name: 'random5', label: '5 Nodes', sub: 'Quick test' },
   { name: 'random20', label: '20 Nodes', sub: 'Major Indian cities' },
   { name: 'random50', label: '50 Nodes', sub: 'Pan-India cities' },
   { name: 'clustered', label: 'Clustered', sub: 'N / W / S regions' },
-  { name: 'grid', label: 'Grid 5×5', sub: 'Uniform layout' },
 ]
 
 
@@ -144,7 +144,42 @@ export default function ControlPanel({
   onLoadPreset, onLoadCSV, onAddPoint, onRemovePoint, onClear,
   onAlgorithmChange, onParamChange, onConstraintChange,
   onRunOptimize, onRunBenchmark,
+  onClose,
 }) {
+  const [actionPanelHeight, setActionPanelHeight] = useState(250)
+  const isDragging = useRef(false)
+  const startY = useRef(0)
+  const startHeight = useRef(250)
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (isDragging.current) {
+        const delta = startY.current - e.clientY
+        setActionPanelHeight(h => Math.min(800, Math.max(120, startHeight.current + delta)))
+      }
+    }
+    const onUp = () => {
+      isDragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  const handleMouseDown = (e) => {
+    e.preventDefault()
+    isDragging.current = true
+    startY.current = e.clientY
+    startHeight.current = actionPanelHeight
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+  }
+
   const [tab, setTab] = useState('data')
   const [manualLat, setManualLat] = useState('')
   const [manualLng, setManualLng] = useState('')
@@ -211,17 +246,9 @@ export default function ControlPanel({
     <div className="flex flex-col h-full bg-[#161f2e] border-r border-slate-800">
 
       { }
-      <div className="px-4 pt-4 pb-3 border-b border-slate-800 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 20 20" fill="white" className="w-3.5 h-3.5">
-              <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 2a6 6 0 110 12A6 6 0 0110 4zm0 2a1 1 0 00-1 1v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7a1 1 0 00-1-1z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-[13px] font-bold text-white leading-tight">Route Optimizer</h1>
-            <p className="text-[9px] text-slate-500 mt-0.5 font-medium tracking-wide">ACO · GA · PSO · NN</p>
-          </div>
+      <div className="px-4 pt-6 pb-5 border-b border-slate-800 shrink-0">
+        <div className="flex items-center justify-center">
+          <h1 className="text-lg font-black tracking-widest text-white uppercase text-center">Route Optimizer</h1>
         </div>
       </div>
 
@@ -457,19 +484,7 @@ export default function ControlPanel({
           <div>
             <CollapsibleSection title="Vehicle Routing" expanded={routingOpen} onToggle={() => setRoutingOpen(v => !v)}>
               <div className="rounded-lg border border-slate-800 bg-slate-800/40 divide-y divide-slate-800">
-                { }
-                <div className="px-3 py-2.5">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-medium text-slate-300">Vehicles</label>
-                    <span className="text-[9px] text-slate-600">fleet size</span>
-                  </div>
-                  <input
-                    type="number" min={1} max={20}
-                    className="input text-xs"
-                    value={constraints.num_vehicles}
-                    onChange={e => onConstraintChange('num_vehicles', parseInt(e.target.value) || 1)}
-                  />
-                </div>
+
 
                 { }
                 <div className="px-3 py-2.5">
@@ -482,6 +497,7 @@ export default function ControlPanel({
                     className="input text-xs"
                     value={constraints.vehicle_capacity >= 1e8 ? '' : constraints.vehicle_capacity}
                     placeholder="Unlimited"
+                    onFocus={e => e.target.select()}
                     onChange={e => {
                       const v = parseFloat(e.target.value)
                       onConstraintChange('vehicle_capacity', isNaN(v) ? 1e9 : v)
@@ -500,6 +516,7 @@ export default function ControlPanel({
                     className="input text-xs"
                     value={constraints.max_distance >= 1e8 ? '' : constraints.max_distance}
                     placeholder="Unlimited"
+                    onFocus={e => e.target.select()}
                     onChange={e => {
                       const v = parseFloat(e.target.value)
                       onConstraintChange('max_distance', isNaN(v) ? 1e9 : v)
@@ -524,7 +541,19 @@ export default function ControlPanel({
       </div>
 
       { }
-      <div className="shrink-0 border-t border-slate-800 bg-[#131c2b]">
+      <div className="relative shrink-0" style={{ height: 6, zIndex: 70 }}>
+        <div
+          className="bottom-resize-handle"
+          onMouseDown={handleMouseDown}
+          title="Drag to resize action panel"
+        >
+          <div className="bottom-resize-indicator" />
+        </div>
+      </div>
+      <div 
+        className="shrink-0 border-t border-slate-800 bg-[#131c2b] overflow-y-auto sidebar-scroll"
+        style={{ height: actionPanelHeight }}
+      >
 
         { }
         <div className="px-3.5 pt-3 pb-2.5 space-y-2">

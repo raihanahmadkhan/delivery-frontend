@@ -272,7 +272,9 @@
   border: 2px solid #60a5fa;
   color: #e0f2fe;
   cursor: pointer;
-  z-index: 60;
+  /* The map area is at z-index:0 (isolated stacking context), so z-index:1
+     here is sufficient to always be above the entire map stack */
+  z-index: 1;
   box-shadow: 0 0 10px rgba(59, 130, 246, 0.4), 0 2px 6px rgba(0, 0, 0, 0.4);
   transition: all 0.2s ease;
 }
@@ -283,6 +285,10 @@
   color: #ffffff;
   transform: scale(1.15);
   box-shadow: 0 0 16px rgba(59, 130, 246, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.panel-toggle-btn:active {
+  transform: scale(0.95);
 }
 
 /* ── Mobile bottom grab handle pill ────────────────────────────────────── */
@@ -298,9 +304,34 @@
 
 /* ── Small-screen responsive overrides ─────────────────────────────────── */
 @media (max-width: 640px) {
-  .leaflet-control-zoom {
-    transform: scale(0.85);
-    transform-origin: top left;
+  /* Zoom control is placed at bottom-right on mobile.
+     Add bottom margin so it clears the bottom panel grab handle. */
+  .leaflet-bottom.leaflet-right .leaflet-control-zoom {
+    margin-bottom: 12px !important;
+    margin-right: 12px !important;
+  }
+
+  /* Larger touch targets for Leaflet zoom buttons */
+  .leaflet-control-zoom a {
+    width: 38px !important;
+    height: 38px !important;
+    line-height: 38px !important;
+    font-size: 20px !important;
+  }
+
+  /* Ensure bottom grab handle area is easy to grab */
+  .bottom-grab-handle {
+    width: 40px !important;
+    height: 5px !important;
+  }
+}
+
+/* ── Mobile bottom-sheet shadow ─────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .mobile-bottom-sheet {
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
   }
 }
 

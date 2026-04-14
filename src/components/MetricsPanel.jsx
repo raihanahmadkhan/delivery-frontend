@@ -35,9 +35,20 @@ export default function MetricsPanel({ result, randomCost }) {
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-white">{result.algorithm}</h3>
         {result.violations > 0 && (
-          <span className="badge bg-red-900/60 text-red-400 border border-red-700">
-            ⚠ {result.violations} violation{result.violations !== 1 ? 's' : ''}
-          </span>
+          <div className="relative group">
+            <span className="badge bg-red-900/60 text-red-400 border border-red-700 cursor-help">
+              ⚠ {result.violations} violation{result.violations !== 1 ? 's' : ''}
+            </span>
+            {result.violation_details?.length > 0 && (
+              <div className="absolute hidden group-hover:block z-50 right-0 top-full mt-2 min-w-[200px] w-max max-w-[280px] p-2 bg-[#0e1522] border border-red-900/50 rounded shadow-2xl">
+                <ul className="list-disc pl-4 text-[11px] text-red-300/90 leading-snug space-y-1">
+                  {result.violation_details.map((v, i) => (
+                    <li key={i}>{v}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         )}
         {result.violations === 0 && result.cost && (
           <span className="badge bg-green-900/60 text-green-400 border border-green-700">

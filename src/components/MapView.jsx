@@ -67,7 +67,7 @@ const INDIA_CENTER = [20.5937, 78.9629]
 const INDIA_ZOOM   = 5
 
 
-export default function MapView({ points, results, activeRoute, onMapClick, overlayAll, onAddPoint }) {
+export default function MapView({ points, results, activeRoute, onMapClick, overlayAll, onAddPoint, onClear, onRemovePoint }) {
   const mapContainerRef = useRef(null)
   const mapRef          = useRef(null)
   const markersLayerRef = useRef(null)
@@ -77,14 +77,19 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
   useEffect(() => {
     if (mapRef.current) return
 
+    const isMobileView = window.innerWidth < 640
     const map = L.map(mapContainerRef.current, {
       center: INDIA_CENTER,
       zoom:   INDIA_ZOOM,
-      zoomControl: true,
+      zoomControl: false,
     })
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    // Position zoom control: bottom-right on mobile (avoids overlap with FABs),
+    // top-right on desktop (Leaflet default)
+    L.control.zoom({ position: isMobileView ? 'bottomright' : 'topleft' }).addTo(map)
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
       maxZoom: 19,
     }).addTo(map)
 
@@ -97,16 +102,19 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
     }
   }, [])
 
-  // ── Map-click → add point ─────────────────────────────────────────────────
+  
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const handler = (e) => onMapClick?.({ latitude: e.latlng.lat, longitude: e.latlng.lng })
+    const handler = (e) => {
+      const wrapped = e.latlng.wrap()
+      onMapClick?.({ latitude: wrapped.lat, longitude: wrapped.lng })
+    }
     map.on('click', handler)
     return () => map.off('click', handler)
   }, [onMapClick])
 
-  // ── Render markers ────────────────────────────────────────────────────────
+  
   useEffect(() => {
     const map   = mapRef.current
     const layer = markersLayerRef.current
@@ -140,7 +148,7 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
 
       marker.bindPopup(popupHtml, { maxWidth: 220 })
 
-      // Permanent label beneath marker with name
+      
       const displayName = pt.name || (isDepot ? 'Depot' : `Point ${idx}`)
       const labelHtml = isDepot ? `<b>Depot</b> – ${pt.name || ''}` : `<b>${idx}</b> ${displayName}`
       marker.bindTooltip(labelHtml, {
@@ -150,10 +158,17 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
         className: 'map-node-label',
       })
 
+      if (!isDepot && onRemovePoint) {
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          onRemovePoint(pt.id)
+        })
+      }
+
       layer.addLayer(marker)
     })
 
-    // Fit map to new point set
+    
     if (points.length >= 2) {
       map.fitBounds(
         L.latLngBounds(points.map(p => [p.latitude, p.longitude])),
@@ -164,7 +179,7 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
     }
   }, [points])
 
-  // ── Render route polylines ─────────────────────────────────────────────────
+  
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -209,7 +224,7 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
     })
   }, [results, activeRoute, overlayAll, points])
 
-  // ── Search-bar city selection ─────────────────────────────────────────────
+  
   const handleSearchSelect = useCallback(({ name, lat, lon }) => {
     if (!onAddPoint) return
 
@@ -221,19 +236,19 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
       demand:    isDepot ? 0 : 10,
     })
 
-    // Fly the map to the selected city
+    
     mapRef.current?.flyTo([lat, lon], 11, { duration: 1.2 })
   }, [onAddPoint, points])
 
   return (
     <div className="relative w-full h-full">
-      {/* Leaflet map */}
+      {}
       <div ref={mapContainerRef} className="w-full h-full rounded-xl" />
 
-      {/* Search bar overlay */}
+      {}
       <LocationSearchBar onSelect={handleSearchSelect} />
 
-      {/* Empty-state hint */}
+      {}
       {points.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-600
@@ -245,9 +260,32 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
         </div>
       )}
 
-      {/* Route legend */}
+      {}
+      {points.length > 0 && onClear && (
+        <button
+          onClick={onClear}
+          className="absolute z-[500] flex items-center gap-1.5
+                     bg-red-600/90 hover:bg-red-500 backdrop-blur-sm border border-red-500
+                     rounded-xl px-3 py-2.5 shadow-lg
+                     text-white hover:text-white
+                     active:scale-95 transition-all duration-150
+                     text-xs font-semibold touch-manipulation
+                     top-14 right-3 sm:top-3 sm:right-[19.5rem]"
+          title="Clear all nodes"
+          aria-label="Reset map"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
+            <path fillRule="evenodd"
+              d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+              clipRule="evenodd" />
+          </svg>
+          <span>Reset Map</span>
+        </button>
+      )}
+
+      {}
       {Object.keys(results).length > 0 && (
-        <div className="absolute bottom-4 right-4 sm:right-auto sm:left-4
+        <div className="absolute bottom-4 left-4
                         bg-slate-900/90 backdrop-blur-sm border border-slate-700
                         rounded-lg p-2 sm:p-3 text-xs space-y-1 sm:space-y-1.5 z-[500]
                         max-w-[180px] sm:max-w-none">

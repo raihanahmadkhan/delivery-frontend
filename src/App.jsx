@@ -57,21 +57,21 @@ export default function App() {
     setActiveRoute,
   } = useOptimizer()
 
-  // ── Responsive state ─────────────────────────────────────────────────────
+  
   const [isMobile,       setIsMobile]       = useState(() => window.innerWidth < 768)
   const [sidebarOpen,    setSidebarOpen]    = useState(false)
   const [bottomExpanded, setBottomExpanded] = useState(false)
 
-  // ── Desktop collapse state ────────────────────────────────────────────────
+  
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [bottomCollapsed,  setBottomCollapsed]  = useState(false)
 
-  // ── UI state ──────────────────────────────────────────────────────────────
+  
   const [overlayAll,     setOverlayAll]     = useState(false)
   const [bottomTab,      setBottomTab]      = useState('metrics')
   const [dismissedError, setDismissedError] = useState(false)
 
-  // ── Desktop resize state ──────────────────────────────────────────────────
+  
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
   const [bottomHeight, setBottomHeight] = useState(BOTTOM_DEFAULT)
 
@@ -82,27 +82,27 @@ export default function App() {
   const startWidth        = useRef(SIDEBAR_DEFAULT)
   const startHeight       = useRef(BOTTOM_DEFAULT)
 
-  // ── Bottom sheet touch refs ───────────────────────────────────────────────
+  
   const touchStartY = useRef(null)
 
-  // ── Window resize listener ────────────────────────────────────────────────
+  
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768)
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  // Close mobile sidebar when switching to desktop
+  
   useEffect(() => {
     if (!isMobile) setSidebarOpen(false)
   }, [isMobile])
 
-  // Re-show error banner when a new error arrives
+  
   useEffect(() => {
     if (error) setDismissedError(false)
   }, [error])
 
-  // ── Desktop drag-to-resize ────────────────────────────────────────────────
+  
   useEffect(() => {
     const onMove = (e) => {
       if (isDraggingSidebar.current) {
@@ -146,7 +146,7 @@ export default function App() {
     document.body.style.userSelect = 'none'
   }, [bottomHeight])
 
-  // ── Bottom sheet swipe gesture ────────────────────────────────────────────
+  
   const handleBottomTouchStart = useCallback((e) => {
     touchStartY.current = e.touches[0].clientY
   }, [])
@@ -158,15 +158,31 @@ export default function App() {
     touchStartY.current = null
   }, [])
 
-  // ── Map click handler ─────────────────────────────────────────────────────
-  const handleMapClick = useCallback(({ latitude, longitude }) => {
+  
+  const handleMapClick = useCallback(async ({ latitude, longitude }) => {
     const isFirst = points.length === 0
+    let placeName = isFirst ? 'Depot' : `Delivery Point ${points.length}`
+
+    try {
+      const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`)
+      const data = await resp.json()
+      if (data && data.address) {
+        const addr = data.address
+        placeName = addr.city || addr.town || addr.village || addr.suburb || addr.state_district || addr.county || placeName
+        
+        if (isFirst) placeName = `Depot (${placeName})`
+      }
+    } catch (err) {
+      console.warn("Reverse geocoding failed:", err)
+    }
+
     addPoint({
       latitude,
       longitude,
-      name:   isFirst ? 'Depot' : `Delivery Point ${points.length}`,
+      name:   placeName,
       demand: isFirst ? 0 : 10,
     })
+    
     if (isMobile) setSidebarOpen(false)
   }, [points, addPoint, isMobile])
 
@@ -174,14 +190,14 @@ export default function App() {
   const randomResult = results['random'] || results['Random'] || null
   const showError    = error && !dismissedError
 
-  // ── Computed sidebar width for desktop ────────────────────────────────────
+  
   const desktopSidebarW = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth
   const desktopBottomH  = bottomCollapsed  ? BOTTOM_COLLAPSED_HEIGHT : bottomHeight
 
   return (
     <div className="flex h-[100dvh] w-screen overflow-hidden bg-[#0f172a]">
 
-      {/* ── Mobile backdrop ──────────────────────────────────────────────── */}
+      {}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px] md:hidden"
@@ -189,7 +205,7 @@ export default function App() {
         />
       )}
 
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      {}
       <div
         className={[
           'flex flex-col h-full overflow-hidden',
@@ -200,10 +216,10 @@ export default function App() {
         ].join(' ')}
         style={{ width: isMobile ? 'min(300px, 85vw)' : desktopSidebarW }}
       >
-        {/* Desktop collapsed state — icon strip */}
+        {}
         {!isMobile && sidebarCollapsed ? (
           <div className="sidebar-collapsed-strip">
-            {/* Expand button */}
+            {}
             <button
               onClick={() => setSidebarCollapsed(false)}
               title="Expand sidebar"
@@ -219,7 +235,7 @@ export default function App() {
               </svg>
             </button>
 
-            {/* App icon */}
+            {}
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
               <svg viewBox="0 0 20 20" fill="white" className="w-3.5 h-3.5">
                 <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 2a6 6 0 110 12A6 6 0 0110 4zm0 2a1 1 0 00-1 1v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7a1 1 0 00-1-1z" />
@@ -249,9 +265,9 @@ export default function App() {
         )}
       </div>
 
-      {/* ── Sidebar resize handle + collapse toggle (desktop only) ────────── */}
+      {}
       {!isMobile && !sidebarCollapsed && (
-        <div className="relative shrink-0 flex">
+        <div className="relative shrink-0 flex" style={{ zIndex: 70 }}>
           <div
             className="sidebar-resize-handle"
             onMouseDown={handleSidebarMouseDown}
@@ -260,10 +276,11 @@ export default function App() {
             <div className="sidebar-resize-indicator" />
           </div>
 
-          {/* Collapse button — sits on the edge of the sidebar */}
+          {}
           <button
             onClick={() => setSidebarCollapsed(true)}
-            className="panel-toggle-btn absolute -right-3 top-1/2 -translate-y-1/2"
+            className="panel-toggle-btn"
+            style={{ position: 'absolute', right: -14, top: '50%', transform: 'translateY(-50%)' }}
             title="Collapse sidebar"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -275,10 +292,10 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Main content ─────────────────────────────────────────────────── */}
+      {}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* Route toggle bar */}
+        {}
         {Object.keys(results).length > 0 && (
           <RouteToggle
             results={results}
@@ -289,7 +306,7 @@ export default function App() {
           />
         )}
 
-        {/* Error banner */}
+        {}
         {showError && (
           <div className="bg-red-950/80 border-b border-red-800 px-4 py-2
                           flex items-center gap-2 shrink-0">
@@ -312,20 +329,22 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Map area ───────────────────────────────────────────────────── */}
-        <div className="flex-1 min-h-0 relative">
+        {}
+        {}
+        <div className="flex-1 min-h-0 relative" style={{ zIndex: 0 }}>
 
-          {/* Mobile hamburger button */}
+          {}
           {isMobile && (
             <button
               onClick={() => setSidebarOpen(true)}
               className="absolute top-3 left-3 z-[500]
-                         bg-slate-900/92 backdrop-blur-sm border border-slate-700
-                         rounded-xl p-2.5 shadow-lg touch-manipulation"
+                         bg-blue-600 hover:bg-blue-500 border border-blue-500
+                         rounded-xl shadow-lg touch-manipulation active:scale-95 transition-colors"
+              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               aria-label="Open menu"
             >
               <svg viewBox="0 0 20 20" fill="currentColor"
-                   className="w-5 h-5 text-slate-300">
+                   className="w-5 h-5 text-white">
                 <path fillRule="evenodd"
                   d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"
                   clipRule="evenodd" />
@@ -333,7 +352,7 @@ export default function App() {
             </button>
           )}
 
-          {/* Loading overlay */}
+          {}
           {(loading || benchmarkLoading) && (
             <div className="absolute inset-0 z-[1000] bg-slate-900/70 backdrop-blur-sm
                             flex flex-col items-center justify-center">
@@ -369,12 +388,14 @@ export default function App() {
             onMapClick={handleMapClick}
             overlayAll={overlayAll}
             onAddPoint={addPoint}
+            onClear={clearPoints}
+            onRemovePoint={removePoint}
           />
         </div>
 
-        {/* ── Bottom panel resize handle + collapse toggle (desktop only) ── */}
+        {}
         {!isMobile && (
-          <div className="relative shrink-0">
+          <div className="relative shrink-0" style={{ height: bottomCollapsed ? 0 : 6, zIndex: 70 }}>
             {!bottomCollapsed && (
               <div
                 className="bottom-resize-handle"
@@ -385,14 +406,15 @@ export default function App() {
               </div>
             )}
 
-            {/* Collapse/expand toggle — centred above the bottom panel */}
+            {}
             <button
               onClick={() => setBottomCollapsed(v => !v)}
-              className="panel-toggle-btn absolute left-1/2 -translate-x-1/2 -top-3"
+              className="panel-toggle-btn"
+              style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%) translateY(-50%)', top: 0 }}
               title={bottomCollapsed ? 'Expand panel' : 'Collapse panel'}
             >
               <svg viewBox="0 0 20 20" fill="currentColor"
-                   className={`w-4 h-4 transition-transform duration-300 ${bottomCollapsed ? 'rotate-180' : ''}`}>
+                   className={`w-4 h-4 transition-transform duration-300 ${bottomCollapsed ? '' : 'rotate-180'}`}>
                 <path fillRule="evenodd"
                   d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z"
                   clipRule="evenodd" />
@@ -401,11 +423,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Bottom analytics panel ────────────────────────────────────── */}
+        {}
         <div
           className={[
             'border-t border-slate-700 flex flex-col shrink-0',
-            isMobile ? 'transition-[height] duration-300 ease-in-out' : 'bottom-transition',
+            isMobile
+              ? 'transition-[height] duration-300 ease-in-out mobile-bottom-sheet'
+              : 'bottom-transition',
           ].join(' ')}
           style={{
             height: isMobile
@@ -415,7 +439,7 @@ export default function App() {
           onTouchStart={isMobile ? handleBottomTouchStart : undefined}
           onTouchEnd={isMobile   ? handleBottomTouchEnd   : undefined}
         >
-          {/* Mobile grab handle */}
+          {}
           {isMobile && (
             <div
               className="flex items-center justify-center py-1.5 shrink-0 cursor-grab active:cursor-grabbing"
@@ -425,10 +449,10 @@ export default function App() {
             </div>
           )}
 
-          {/* Tab bar */}
-          <div className="flex items-stretch border-b border-slate-700 bg-[#1e293b] shrink-0 min-h-[44px]">
+          {}
+          <div className="flex items-stretch border-b border-slate-700 bg-[#1e293b] shrink-0 min-h-[44px] overflow-x-auto hide-scrollbar">
 
-            {/* Mobile expand / collapse toggle */}
+            {}
             {isMobile && (
               <button
                 onClick={() => setBottomExpanded(v => !v)}
@@ -437,7 +461,7 @@ export default function App() {
                 aria-label={bottomExpanded ? 'Collapse panel' : 'Expand panel'}
               >
                 <svg viewBox="0 0 20 20" fill="currentColor"
-                     className={`w-4 h-4 transition-transform duration-300 ${bottomExpanded ? '' : 'rotate-180'}`}>
+                     className={`w-4 h-4 transition-transform duration-300 ${bottomExpanded ? 'rotate-180' : ''}`}>
                   <path fillRule="evenodd"
                     d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z"
                     clipRule="evenodd" />
@@ -445,7 +469,7 @@ export default function App() {
               </button>
             )}
 
-            {/* Tabs */}
+            {}
             {BOTTOM_TABS.map(t => (
               <button
                 key={t.key}
@@ -455,20 +479,20 @@ export default function App() {
                   if (!isMobile && bottomCollapsed) setBottomCollapsed(false)
                 }}
                 className={[
-                  'flex items-center gap-1.5 px-3 sm:px-5 py-2.5',
-                  'text-xs font-semibold transition-colors border-b-2 -mb-px touch-manipulation',
+                  'flex shrink-0 items-center gap-1.5 px-3 sm:px-5 py-2.5 min-w-[4rem] sm:min-w-0',
+                  'text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px touch-manipulation',
                   bottomTab === t.key
                     ? 'text-blue-400 border-blue-400'
                     : 'text-slate-500 border-transparent hover:text-slate-300',
                 ].join(' ')}
               >
                 {t.icon}
-                <span className="hidden sm:inline">{t.label}</span>
+                <span>{t.label}</span>
               </button>
             ))}
 
-            {/* Status row (right side) */}
-            <div className="ml-auto flex items-center gap-2 sm:gap-3 px-3 sm:px-4">
+            {}
+            <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 px-3 sm:px-4">
               {points.length > 0 && (
                 <span className="text-[11px] text-slate-500 font-mono">
                   {points.length} nodes
@@ -482,7 +506,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Panel content — hidden when collapsed */}
+          {}
           {(isMobile ? bottomExpanded : !bottomCollapsed) && (
             <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
               {bottomTab === 'metrics'     && (
