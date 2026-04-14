@@ -27,7 +27,9 @@ export default function RouteToggle({ results, activeRoute, overlayAll, onSelect
   if (entries.length === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-[#1e293b] border-b border-slate-700">
+    <div className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#1e293b] border-b border-slate-700
+                    overflow-x-auto scrollbar-hide"
+         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide shrink-0">View:</span>
 
       {entries.map(([key, res]) => {

@@ -27,12 +27,15 @@ function getAlgoColor(algo) {
 }
 
 
-function makeCircleIcon(color, size = 14) {
+function makeCircleIcon(color, label = '', size = 22) {
   const s = size + 4
+  const fontSize = size <= 22 ? 10 : 12
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
       <circle cx="${s / 2}" cy="${s / 2}" r="${size / 2}"
               fill="${color}" stroke="#fff" stroke-width="2" opacity="0.95"/>
+      <text x="${s / 2}" y="${s / 2 + fontSize * 0.35}" text-anchor="middle"
+            font-size="${fontSize}" fill="white" font-weight="bold" font-family="system-ui, sans-serif">${label}</text>
     </svg>`
   return L.divIcon({
     html: svg,
@@ -114,7 +117,7 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
 
     points.forEach((pt, idx) => {
       const isDepot = idx === 0
-      const icon    = isDepot ? makeDepotIcon() : makeCircleIcon('#3b82f6', 16)
+      const icon    = isDepot ? makeDepotIcon() : makeCircleIcon('#3b82f6', String(idx))
       const marker  = L.marker([pt.latitude, pt.longitude], { icon })
 
       const popupHtml = `
@@ -136,6 +139,17 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
         </div>`
 
       marker.bindPopup(popupHtml, { maxWidth: 220 })
+
+      // Permanent label beneath marker with name
+      const displayName = pt.name || (isDepot ? 'Depot' : `Point ${idx}`)
+      const labelHtml = isDepot ? `<b>Depot</b> – ${pt.name || ''}` : `<b>${idx}</b> ${displayName}`
+      marker.bindTooltip(labelHtml, {
+        permanent: true,
+        direction: 'bottom',
+        offset: [0, isDepot ? 4 : 8],
+        className: 'map-node-label',
+      })
+
       layer.addLayer(marker)
     })
 
@@ -233,20 +247,21 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
 
       {/* Route legend */}
       {Object.keys(results).length > 0 && (
-        <div className="absolute bottom-4 left-4
+        <div className="absolute bottom-4 right-4 sm:right-auto sm:left-4
                         bg-slate-900/90 backdrop-blur-sm border border-slate-700
-                        rounded-lg p-3 text-xs space-y-1.5 z-[500]">
-          <div className="text-slate-400 font-semibold mb-2 uppercase tracking-wide text-[10px]">
+                        rounded-lg p-2 sm:p-3 text-xs space-y-1 sm:space-y-1.5 z-[500]
+                        max-w-[180px] sm:max-w-none">
+          <div className="text-slate-400 font-semibold mb-1.5 sm:mb-2 uppercase tracking-wide text-[10px]">
             Routes
           </div>
           {Object.entries(results).map(([key, res]) => (
             <div key={key} className="flex items-center gap-2">
               <div
-                className="w-6 h-1.5 rounded-full"
+                className="w-5 sm:w-6 h-1.5 rounded-full shrink-0"
                 style={{ backgroundColor: getAlgoColor(res.algorithm || key) }}
               />
-              <span className="text-slate-300">{res.algorithm || key}</span>
-              <span className="text-slate-500">{res.cost?.toFixed(1)} km</span>
+              <span className="text-slate-300 truncate">{res.algorithm || key}</span>
+              <span className="text-slate-500 whitespace-nowrap">{res.cost?.toFixed(1)} km</span>
             </div>
           ))}
         </div>

@@ -30,6 +30,25 @@
 .leaflet-top, .leaflet-bottom { z-index: 400 !important; }
 .leaflet-pane { z-index: 300 !important; }
 
+/* ── Permanent node labels on the map ──────────────────────────────────── */
+.map-node-label {
+  background: rgba(15, 23, 42, 0.82) !important;
+  border: 1px solid rgba(100, 116, 139, 0.45) !important;
+  border-radius: 6px !important;
+  padding: 2px 7px !important;
+  font-size: 11px !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+}
+.map-node-label::before { display: none !important; }
+.map-node-label b {
+  color: #60a5fa !important;
+  font-weight: 700 !important;
+}
+
 
 .leaflet-tile-pane { filter: brightness(0.85) saturate(0.9); }
 
@@ -214,3 +233,77 @@
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb { @apply bg-slate-700 rounded-full; }
 .sidebar-scroll::-webkit-scrollbar-thumb:hover { @apply bg-slate-600; }
+
+/* ── Sidebar collapse transition (desktop) ─────────────────────────────── */
+.sidebar-transition {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Collapsed sidebar icon strip ──────────────────────────────────────── */
+.sidebar-collapsed-strip {
+  @apply flex flex-col items-center py-3 gap-3 bg-[#161f2e] border-r border-slate-800 h-full;
+  width: 48px;
+}
+
+.sidebar-collapsed-strip button {
+  @apply w-9 h-9 rounded-lg flex items-center justify-center
+         text-slate-500 hover:text-slate-200 hover:bg-slate-800
+         transition-colors duration-150;
+}
+
+.sidebar-collapsed-strip button.active {
+  @apply text-blue-400 bg-blue-500/10;
+}
+
+/* ── Bottom panel collapse transition (desktop) ────────────────────────── */
+.bottom-transition {
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Panel collapse toggle buttons ─────────────────────────────────────── */
+.panel-toggle-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e40af;
+  border: 2px solid #60a5fa;
+  color: #e0f2fe;
+  cursor: pointer;
+  z-index: 60;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4), 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.panel-toggle-btn:hover {
+  background: #2563eb;
+  border-color: #93c5fd;
+  color: #ffffff;
+  transform: scale(1.15);
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Mobile bottom grab handle pill ────────────────────────────────────── */
+.bottom-grab-handle {
+  @apply w-8 h-1 rounded-full bg-slate-600 mx-auto;
+  transition: background-color 0.15s, width 0.15s;
+}
+
+.bottom-grab-handle:hover,
+.bottom-grab-handle:active {
+  @apply bg-slate-400 w-10;
+}
+
+/* ── Small-screen responsive overrides ─────────────────────────────────── */
+@media (max-width: 640px) {
+  .leaflet-control-zoom {
+    transform: scale(0.85);
+    transform-origin: top left;
+  }
+}
+
+/* ── Hide scrollbar utility ────────────────────────────────────────────── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

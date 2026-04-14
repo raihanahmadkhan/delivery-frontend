@@ -187,7 +187,7 @@ export default function LocationSearchBar({ onSelect }) {
   return (
     <div
       ref={containerRef}
-      className="absolute top-3 right-3 z-[500] w-72"
+      className="absolute top-3 left-14 right-3 sm:left-auto sm:right-3 z-[500] sm:w-72"
       // Prevent Leaflet from capturing scroll / click inside the bar
       onWheel={e => e.stopPropagation()}
     >

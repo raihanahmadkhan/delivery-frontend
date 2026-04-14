@@ -61,6 +61,7 @@ export default function BenchmarkTable({ data }) {
   }
 
   const { results, summary } = data
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 640
 
   const barData = results.map((r) => ({
     algorithm: r.algorithm,
@@ -73,7 +74,7 @@ export default function BenchmarkTable({ data }) {
     <div className="space-y-4 animate-fade-in">
 
       {}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
         <div className="card text-center">
           <div className="text-xs text-slate-400 mb-1">Best Algorithm</div>
           <div className="text-sm font-bold text-blue-400">{summary.best_algorithm}</div>
@@ -107,7 +108,7 @@ export default function BenchmarkTable({ data }) {
             ⬇ Export CSV
           </button>
         </div>
-        <ResponsiveContainer width="100%" height={180}>
+        <ResponsiveContainer width="100%" height={isMobileView ? 140 : 180}>
           <BarChart data={barData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
             <XAxis
@@ -133,7 +134,7 @@ export default function BenchmarkTable({ data }) {
       {}
       <div className="card overflow-x-auto">
         <h3 className="text-sm font-bold text-white mb-3">Ranked Results</h3>
-        <table className="w-full text-xs">
+        <table className="w-full text-xs min-w-[520px]">
           <thead>
             <tr className="text-left text-slate-500 border-b border-slate-700">
               <th className="pb-2 pr-3 font-semibold">#</th>
