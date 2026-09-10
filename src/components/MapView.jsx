@@ -88,10 +88,12 @@ export default function MapView({ points, results, activeRoute, onMapClick, over
     // top-right on desktop (Leaflet default)
     L.control.zoom({ position: isMobileView ? 'bottomright' : 'topleft' }).addTo(map)
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
-      maxZoom: 19,
-    }).addTo(map)
+   // CARTO's keyless basemap CDN now stamps tiles with "API KEY REQUIRED".
+// Use the standard OpenStreetMap raster tiles, which need no key.
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19,
+}).addTo(map)
 
     markersLayerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
