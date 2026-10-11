@@ -28,6 +28,34 @@ export function isDraft(value: unknown): value is Scenario {
     return false
   if (!Number.isInteger(fleet.count) || (fleet.count as number) < 1 || (fleet.count as number) > 25)
     return false
+  if (value.matrix != null) {
+    const matrix = value.matrix
+    const size = value.nodes.length
+    if (
+      !record(matrix) ||
+      !['source', 'profile', 'data_version'].every((key) => typeof matrix[key] === 'string')
+    )
+      return false
+    for (const key of ['distances_km', 'durations_minutes']) {
+      const table = matrix[key]
+      if (
+        !Array.isArray(table) ||
+        table.length !== size ||
+        table.some(
+          (row) =>
+            !Array.isArray(row) ||
+            row.length !== size ||
+            row.some((entry) => entry !== null && !finite(entry)),
+        )
+      )
+        return false
+    }
+    if (
+      matrix.road != null &&
+      (!record(matrix.road) || typeof matrix.road.captured_at !== 'string')
+    )
+      return false
+  }
   const ids = new Set<string>()
   for (const node of value.nodes) {
     if (

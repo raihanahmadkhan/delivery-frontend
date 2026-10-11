@@ -5,11 +5,19 @@ import RouteLab from './RouteLab'
 import StopEditor from './StopEditor'
 import { changePlace, isDraft, newRoadScenario, parseSeeds, jobFromHash } from './state'
 import { request, upload } from './api'
-import type { Scenario } from './types'
+import type { MapConfiguration, Scenario } from './types'
 
 vi.mock('./GeographicMap', () => ({
-  default: ({ scenario: s }: { scenario: Scenario }) => (
-    <div aria-label="Geographic workspace">{s.nodes.length} map places</div>
+  default: ({
+    scenario: s,
+    configuration,
+  }: {
+    scenario: Scenario
+    configuration: MapConfiguration
+  }) => (
+    <div aria-label="Geographic workspace" data-tile-url={configuration.tile_url}>
+      {s.nodes.length} map places
+    </div>
   ),
 }))
 
@@ -60,6 +68,23 @@ describe('input and identity guards', () => {
     expect(isDraft({ ...scenario, nodes: [null, null] })).toBe(false)
     expect(isDraft({ ...scenario, depot_id: 'missing' })).toBe(false)
     expect(isDraft({ ...scenario, nodes: [scenario.nodes[0], scenario.nodes[0]] })).toBe(false)
+    const matrix = {
+      source: 'test',
+      profile: 'driving',
+      data_version: '1',
+      distances_km: [
+        [0, 1],
+        [1, 0],
+      ],
+      durations_minutes: [
+        [0, 2],
+        [2, 0],
+      ],
+    }
+    expect(isDraft({ ...scenario, matrix })).toBe(true)
+    expect(isDraft({ ...scenario, matrix: { ...matrix, source: {} } })).toBe(false)
+    expect(isDraft({ ...scenario, matrix: { ...matrix, distances_km: [null] } })).toBe(false)
+    expect(isDraft({ ...scenario, matrix: { ...matrix, road: [] } })).toBe(false)
   })
   it('does not silently convert an empty seed to zero', () => {
     expect(parseSeeds('0, 42')).toEqual([0, 42])
@@ -135,6 +160,36 @@ describe('safe, accessible route rendering', () => {
 })
 
 describe('API failures', () => {
+  it('keeps the configured map provider when another startup request fails', async () => {
+    const tile_url = 'https://maps.example.com/{z}/{x}/{y}.png'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/road-status'))
+          return new Response(JSON.stringify({ configured: true, tile_url }))
+        throw new TypeError('Failed to fetch')
+      }),
+    )
+    render(<RouteLab />)
+    await waitFor(() =>
+      expect(screen.getByLabelText('Geographic workspace').getAttribute('data-tile-url')).toBe(
+        tile_url,
+      ),
+    )
+    expect(screen.getByText('Offline')).toBeTruthy()
+  })
+
+  it('shows a service error without local startup instructions when the API is unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    render(<RouteLab />)
+    expect(
+      await screen.findByText(
+        'Unable to connect to the route service. Please try again in a moment.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('Offline')).toBeTruthy()
+    expect(screen.queryByText(/port 8000|Failed to fetch/)).toBeNull()
+  })
   it('explains non-JSON proxy failures', async () => {
     vi.stubGlobal(
       'fetch',
@@ -217,6 +272,30 @@ describe('workbench interactions', () => {
       'page',
     )
   })
+  it('labels replans with the executed repair method in history', async () => {
+    const fetch = mockAPI()
+    const fallback = fetch.getMockImplementation()!
+    fetch.mockImplementation(async (url) =>
+      String(url).endsWith('/runs')
+        ? new Response(
+            JSON.stringify([
+              {
+                id: 'a'.repeat(32),
+                name: 'Replanned route',
+                kind: 'replan',
+                algorithm: 'exact',
+                status: 'completed',
+                created: 0,
+              },
+            ]),
+          )
+        : fallback(url),
+    )
+    render(<RouteLab />)
+    fireEvent.click(screen.getByRole('button', { name: 'History' }))
+    expect(await screen.findByRole('cell', { name: 'Onboard sequence repair' })).toBeTruthy()
+    expect(screen.queryByRole('cell', { name: 'Exact reference' })).toBeNull()
+  })
   it('does not show unrelated draft geometry while a saved run is loading', async () => {
     localStorage.setItem('routelab.scenario.v1', JSON.stringify(scenario))
     history.replaceState(null, '', '#run=' + 'a'.repeat(32))
@@ -245,6 +324,30 @@ describe('workbench interactions', () => {
     )
     render(<RouteLab />)
     expect(screen.queryByRole('group', { name: /Delivery routes/ })).toBeNull()
+  })
+  it('returns to the draft when a bookmarked run no longer exists', async () => {
+    history.replaceState(null, '', '#run=' + 'a'.repeat(32))
+    const fetch = mockAPI()
+    const fallback = fetch.getMockImplementation()!
+    fetch.mockImplementation(async (url) =>
+      String(url).includes('/runs/')
+        ? new Response(JSON.stringify({ detail: 'Run not found' }), { status: 404 })
+        : fallback(url),
+    )
+    const close = vi.fn()
+    vi.stubGlobal(
+      'EventSource',
+      class {
+        addEventListener() {}
+        close = close
+      },
+    )
+    render(<RouteLab />)
+    await screen.findByText('Run not found')
+    await waitFor(() => expect(location.hash).toBe(''))
+    expect(screen.getByRole('group', { name: /Delivery routes/ })).toBeTruthy()
+    expect(close).toHaveBeenCalled()
+    expect(screen.queryByText('Loading route…')).toBeNull()
   })
   it('does not let a delayed saved snapshot overwrite a newer draft edit', async () => {
     const fetch = mockAPI()
@@ -277,6 +380,85 @@ describe('workbench interactions', () => {
       expect(screen.getByRole('button', { name }).getAttribute('aria-label')).toBe(name)
     }
     await waitFor(() => expect(screen.getByDisplayValue('Audit scenario')).toBeTruthy())
+  })
+
+  it('clears location undo when loading another scenario', async () => {
+    const fetch = mockAPI()
+    const fallback = fetch.getMockImplementation()!
+    fetch.mockImplementation(async (url) => {
+      if (String(url).endsWith('/scenarios/saved'))
+        return new Response(JSON.stringify({ ...scenario, name: 'Saved scenario' }))
+      if (String(url).endsWith('/scenarios'))
+        return new Response(JSON.stringify([{ id: 'saved', name: 'Saved scenario', created: 0 }]))
+      return fallback(url)
+    })
+    render(<RouteLab />)
+    await waitFor(() => expect(screen.getByDisplayValue('Audit scenario')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '+ Add stop' }))
+    expect(screen.getByRole('button', { name: 'Undo location edit' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Saved routes'), { target: { value: 'saved' } })
+    await screen.findByDisplayValue('Saved scenario')
+    expect(screen.queryByRole('button', { name: 'Undo location edit' })).toBeNull()
+  })
+
+  it('shows search controls only for algorithms that use them', async () => {
+    mockAPI()
+    render(<RouteLab />)
+    await waitFor(() => expect(screen.getByDisplayValue('Audit scenario')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '04 Solve' }))
+    expect(screen.getByLabelText('Adaptive operator weights')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Algorithm', { exact: true }), {
+      target: { value: 'greedy' },
+    })
+    expect(screen.queryByLabelText('Adaptive operator weights')).toBeNull()
+    expect(screen.queryByLabelText('Local improvement')).toBeNull()
+    expect(screen.queryByLabelText('Max iterations')).toBeNull()
+    expect(screen.getByLabelText('Random seed')).toBeTruthy()
+  })
+
+  it('blocks an exact solve after loading a route above its delivery limit', async () => {
+    const fetch = mockAPI()
+    const fallback = fetch.getMockImplementation()!
+    const large = {
+      ...scenario,
+      name: 'Large scenario',
+      nodes: [
+        scenario.nodes[0],
+        ...Array.from({ length: 9 }, (_, i) => ({
+          ...scenario.nodes[1],
+          id: `stop-${i}`,
+        })),
+      ],
+    }
+    fetch.mockImplementation(async (url) => {
+      if (String(url).endsWith('/scenarios/large')) return new Response(JSON.stringify(large))
+      if (String(url).endsWith('/scenarios'))
+        return new Response(JSON.stringify([{ id: 'large', name: 'Large scenario', created: 0 }]))
+      return fallback(url)
+    })
+    render(<RouteLab />)
+    await waitFor(() => expect(screen.getByDisplayValue('Audit scenario')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '04 Solve' }))
+    fireEvent.change(screen.getByLabelText('Algorithm', { exact: true }), {
+      target: { value: 'exact' },
+    })
+    fireEvent.change(screen.getByLabelText('Saved routes'), { target: { value: 'large' } })
+    await screen.findByDisplayValue('Large scenario')
+    fireEvent.click(screen.getByRole('button', { name: '04 Solve' }))
+    expect(
+      (screen.getByRole('button', { name: 'Plan routes →' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(screen.getByText(/Exact reference supports up to 8 deliveries/)).toBeTruthy()
+  })
+
+  it('does not submit a comparison until a route is ready', async () => {
+    mockAPI(false)
+    render(<RouteLab />)
+    await waitFor(() => expect(screen.getByDisplayValue('Untitled route')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(
+      (screen.getByRole('button', { name: 'Compare routes' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
   })
 
   it('submits the frozen road snapshot and never submits a failed road request', async () => {

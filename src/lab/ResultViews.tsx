@@ -5,13 +5,13 @@ import { request } from './api'
 
 export const number = (value: number | null | undefined, digits = 2) =>
   value == null
-    ? '—'
+    ? 'N/A'
     : value.toLocaleString(undefined, {
         maximumFractionDigits: digits,
         minimumFractionDigits: digits,
       })
 const clock = (value: number) =>
-  `${Math.floor(value / 60)
+  `${value >= 1440 ? `Day ${Math.floor(value / 1440) + 1} ` : ''}${Math.floor((value % 1440) / 60)
     .toString()
     .padStart(2, '0')}:${Math.floor(value % 60)
     .toString()
@@ -324,7 +324,7 @@ export function ExperimentView({
                   {row.feasible_runs}/{row.runs}
                 </td>
                 <td>
-                  {row.min_vehicles ?? '—'}–{row.max_vehicles ?? '—'}
+                  {row.min_vehicles ?? 'N/A'}–{row.max_vehicles ?? 'N/A'}
                 </td>
                 <td>{number(row.median_distance_at_min_vehicles)}</td>
                 <td>
@@ -332,7 +332,9 @@ export function ExperimentView({
                   {number(row.max_distance_at_min_vehicles)}
                 </td>
                 <td>{number(row.distance_stdev_at_min_vehicles)}</td>
-                <td>{number((row.median_solver_ms ?? 0) / 1000)}s</td>
+                <td>
+                  {row.median_solver_ms == null ? 'N/A' : `${number(row.median_solver_ms / 1000)}s`}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -505,67 +507,32 @@ export function MoveInspector({ result, selected }: { result: Result; selected: 
 }
 
 export function Provenance({ result }: { result: Result }) {
+  const searchStatus: Record<string, string> = {
+    completed: 'Completed',
+    time_limit: 'Time limit reached',
+    iteration_limit: 'Search limit reached',
+    cancelled: 'Cancelled',
+    no_unlocked_moves: 'Remaining stops cannot be reordered',
+  }
+  const planQuality = result.evaluation.feasible
+    ? result.proven_optimal
+      ? 'Optimal plan confirmed'
+      : 'Valid plan · optimality not verified'
+    : result.status === 'proven_infeasible'
+      ? 'No valid plan is possible with these constraints'
+      : 'No valid plan found'
+
   return (
     <div className="provenance">
       <h3>Run details</h3>
       <dl>
-        <dt>Solver</dt>
-        <dd>
-          {LABELS[result.algorithm] ?? result.algorithm} · v{result.solver_version}
-        </dd>
-        <dt>Stopped because</dt>
-        <dd>{result.termination_reason.replaceAll('_', ' ')}</dd>
-        <dt>Seed</dt>
-        <dd>{result.options.seed}</dd>
-        <dt>Optimality</dt>
-        <dd>{result.proven_optimal ? 'Proven optimal' : 'Not certified'}</dd>
-        {result.exact_reference && (
-          <>
-            <dt>Exact reference</dt>
-            <dd>
-              {result.exact_reference.vehicles_gap} extra vehicles ·{' '}
-              {result.exact_reference.distance_gap_percent == null
-                ? 'distance gap unavailable'
-                : `${number(result.exact_reference.distance_gap_percent)}% distance gap`}
-            </dd>
-          </>
-        )}
+        <dt>Method</dt>
+        <dd>{LABELS[result.algorithm] ?? 'Route optimization'}</dd>
+        <dt>Search status</dt>
+        <dd>{searchStatus[result.termination_reason] ?? 'Finished'}</dd>
+        <dt>Plan quality</dt>
+        <dd>{planQuality}</dd>
       </dl>
-      <details className="result-details">
-        <summary>Reproducibility data</summary>
-        <dl>
-          <dt>Scenario SHA-256</dt>
-          <dd className="raw-data">{result.scenario_hash}</dd>
-          <dt>Matrix SHA-256</dt>
-          <dd className="raw-data">{result.matrix_hash}</dd>
-          <dt>Travel model</dt>
-          <dd>
-            <pre className="raw-data">{JSON.stringify(result.matrix_provenance, null, 2)}</pre>
-          </dd>
-          <dt>Settings</dt>
-          <dd>
-            <pre className="raw-data">{JSON.stringify(result.options, null, 2)}</pre>
-          </dd>
-          {result.environment && (
-            <>
-              <dt>Engine source SHA-256</dt>
-              <dd className="raw-data">{result.environment.source_sha256}</dd>
-              <dt>Environment</dt>
-              <dd>
-                <pre className="raw-data">{JSON.stringify(result.environment, null, 2)}</pre>
-              </dd>
-            </>
-          )}
-        </dl>
-      </details>
-      <details className="result-details">
-        <summary>Optimality notes</summary>
-        <p className="method-note">
-          Feasible means the route meets all constraints. Optimality is certified only when the
-          exact reference finishes. A timeout does not prove infeasibility.
-        </p>
-        {result.exact_reference && <p className="method-note">{result.exact_reference.note}</p>}
-      </details>
     </div>
   )
 }

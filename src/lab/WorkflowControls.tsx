@@ -55,6 +55,9 @@ export default function WorkflowControls(p: Props) {
   const node = s?.nodes.find((n) => n.id === p.selected)
   const maxCustomers = road && !s?.matrix ? (p.road.max_customers ?? 25) : 100
   const ready = !!depot && customers.length > 0 && customers.length <= maxCustomers
+  const algorithmReady =
+    p.available.includes(p.options.algorithm) &&
+    (p.options.algorithm !== 'exact' || customers.length <= 8)
   const setOption = <K extends keyof Options>(key: K, value: Options[K]) =>
     p.onOptions({ ...p.options, [key]: value })
   const field = (
@@ -283,43 +286,47 @@ export default function WorkflowControls(p: Props) {
                     onChange={(e) => setOption('seed', +e.target.value)}
                   />
                 </label>
-                <label>
-                  Max iterations
-                  <input
-                    type="number"
-                    min="1"
-                    max="10000"
-                    value={p.options.iterations}
-                    onChange={(e) => setOption('iterations', +e.target.value)}
-                  />
-                </label>
-                <label>
-                  Stops removed per iteration · {Math.round(p.options.removal_fraction * 100)}%
-                  <input
-                    type="range"
-                    min="0.05"
-                    max="0.6"
-                    step="0.05"
-                    value={p.options.removal_fraction}
-                    onChange={(e) => setOption('removal_fraction', +e.target.value)}
-                  />
-                </label>
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    checked={p.options.adaptive}
-                    onChange={(e) => setOption('adaptive', e.target.checked)}
-                  />
-                  Adaptive operator weights
-                </label>
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    checked={p.options.local_improvement}
-                    onChange={(e) => setOption('local_improvement', e.target.checked)}
-                  />
-                  Local improvement
-                </label>
+                {p.options.algorithm === 'alns' && (
+                  <>
+                    <label>
+                      Max iterations
+                      <input
+                        type="number"
+                        min="1"
+                        max="10000"
+                        value={p.options.iterations}
+                        onChange={(e) => setOption('iterations', +e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Stops removed per iteration · {Math.round(p.options.removal_fraction * 100)}%
+                      <input
+                        type="range"
+                        min="0.05"
+                        max="0.6"
+                        step="0.05"
+                        value={p.options.removal_fraction}
+                        onChange={(e) => setOption('removal_fraction', +e.target.value)}
+                      />
+                    </label>
+                    <label className="check-label">
+                      <input
+                        type="checkbox"
+                        checked={p.options.adaptive}
+                        onChange={(e) => setOption('adaptive', e.target.checked)}
+                      />
+                      Adaptive operator weights
+                    </label>
+                    <label className="check-label">
+                      <input
+                        type="checkbox"
+                        checked={p.options.local_improvement}
+                        onChange={(e) => setOption('local_improvement', e.target.checked)}
+                      />
+                      Local improvement
+                    </label>
+                  </>
+                )}
               </details>
               <details className="advanced-settings road-readiness">
                 <summary>Travel data</summary>
@@ -332,13 +339,9 @@ export default function WorkflowControls(p: Props) {
                       ? 'Road network'
                       : 'Straight-line distances'}
                 </strong>
-                <p>
-                  {road
-                    ? 'Driving times exclude live traffic.'
-                    : s.matrix
-                      ? `Source: ${s.matrix.source}`
-                      : 'Uses a constant travel speed.'}
-                </p>
+                {!road && (
+                  <p>{s.matrix ? `Source: ${s.matrix.source}` : 'Uses a constant travel speed.'}</p>
+                )}
                 {!road && !s.matrix && (
                   <label>
                     Speed (km/h)
@@ -428,7 +431,7 @@ export default function WorkflowControls(p: Props) {
                 Edit JSON
               </button>
             </div>
-            <p className="footnote">JSON, CSV, or Solomon format.</p>
+            <p className="footnote">Import a JSON or CSV file.</p>
           </details>
         )}
       </div>
@@ -440,7 +443,9 @@ export default function WorkflowControls(p: Props) {
         ) : (
           <button
             className="primary"
-            disabled={!ready || p.busy || (road && !s?.matrix && !p.road.configured)}
+            disabled={
+              !ready || !algorithmReady || p.busy || (road && !s?.matrix && !p.road.configured)
+            }
             onClick={p.onRun}
           >
             {p.preparing ? 'Preparing roads…' : p.busy ? 'Submitting…' : 'Plan routes →'}
@@ -451,6 +456,13 @@ export default function WorkflowControls(p: Props) {
             {customers.length > maxCustomers
               ? `Remove ${customers.length - maxCustomers} stops to continue.`
               : 'Add a depot and at least one delivery.'}
+          </small>
+        )}
+        {ready && !algorithmReady && p.step === 'solve' && (
+          <small role="status">
+            {p.options.algorithm === 'exact' && customers.length > 8
+              ? 'Exact reference supports up to 8 deliveries. Choose another algorithm.'
+              : 'Choose an available algorithm.'}
           </small>
         )}
       </div>
