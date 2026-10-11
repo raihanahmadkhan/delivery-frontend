@@ -4,9 +4,6 @@
   --wash: #ecece7;
   --ink: #19191b;
   --muted: #5e5e61;
-  --rule: #19191b;
-  --forest: #19191b;
-  --forest-deep: #19191b;
   --green: #246143;
   --amber: #795300;
   --red: #a32c27;
@@ -473,8 +470,7 @@ select {
   height: 5px;
   background: currentColor;
 }
-.status-pill.completed,
-.status-pill.draft {
+.status-pill.completed {
   color: var(--green);
   background: #edf8e7;
 }
@@ -661,9 +657,6 @@ select {
 }
 .mono {
   font-family: var(--mono);
-}
-.block {
-  display: block;
 }
 .replay-bar {
   display: flex;
@@ -1034,16 +1027,7 @@ td {
 }
 .provenance dd {
   margin: 0;
-  font-family: var(--mono);
   overflow-wrap: anywhere;
-}
-.raw-data {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  font: 11px/1.7 var(--mono);
-  background: var(--wash);
-  padding: 16px;
 }
 .stop-inspector {
   padding: 24px;
@@ -1175,11 +1159,6 @@ td {
 }
 .notebook td strong {
   font-size: 14px;
-}
-.notebook td small {
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 5px;
 }
 .disruption-comparison {
   display: flex;

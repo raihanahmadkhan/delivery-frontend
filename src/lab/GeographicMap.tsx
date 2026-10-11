@@ -3,6 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { request } from './api'
 import { color } from './RouteCanvas'
+import PlaceSearch from './PlaceSearch'
 import type { MapConfiguration, Place, Scenario } from './types'
 
 type Shape = { type: 'LineString'; coordinates: [number, number][] }
@@ -38,19 +39,15 @@ export default function GeographicMap(props: Props) {
   const current = useRef(props)
   const [mode, setMode] = useState<'explore' | 'depot' | 'delivery'>('explore')
   const modeRef = useRef(mode)
-  const [query, setQuery] = useState('')
-  const [places, setPlaces] = useState<Place[]>([])
   const [candidate, setCandidate] = useState<Place | null>(null)
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState('')
   const [tileError, setTileError] = useState(false)
+  const tileUrl = configuration.tile_url || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
   const [shapes, setShapes] = useState<{
     key: string
     values: Record<number, Shape>
     errors: string[]
     busy: boolean
   }>({ key: '', values: {}, errors: [], busy: false })
-  const searchAbort = useRef<AbortController | null>(null)
   const geometryKey = JSON.stringify([
     scenario.matrix,
     scenario.nodes.map((n) => [n.id, n.latitude, n.longitude]),
@@ -65,7 +62,7 @@ export default function GeographicMap(props: Props) {
     if (!host.current) return
     const instance = L.map(host.current, {
       zoomControl: false,
-      scrollWheelZoom: false,
+      scrollWheelZoom: true,
       attributionControl: true,
     }).setView([18.5204, 73.8567], 12)
     map.current = instance
@@ -96,13 +93,12 @@ export default function GeographicMap(props: Props) {
       instance.remove()
       map.current = null
       fitted.current = false
-      searchAbort.current?.abort()
     }
   }, [])
 
   useEffect(() => {
-    if (!map.current || !configuration.tile_url) return
-    const tile = L.tileLayer(configuration.tile_url, {
+    if (!map.current) return
+    const tile = L.tileLayer(tileUrl, {
       maxZoom: 19,
       minZoom: 2,
       attribution:
@@ -116,9 +112,8 @@ export default function GeographicMap(props: Props) {
     return () => {
       tile.remove()
     }
-  }, [configuration.tile_url])
+  }, [tileUrl])
 
-  // Fit a loaded scenario once; editing or focusing a stop should not fight the camera.
   useEffect(() => {
     if (fitted.current || !scenario.nodes.length || !map.current) return
     fitStops(map.current, scenario.nodes, 45)
@@ -133,7 +128,6 @@ export default function GeographicMap(props: Props) {
     const errors: string[] = []
     async function load() {
       setShapes({ key, values: {}, errors: [], busy: true })
-      // Sequential requests respect community service limits and allow partial geometry.
       for (let i = 0; i < routes.length; i++) {
         if (controller.signal.aborted) return
         if (!routes[i].length) continue
@@ -175,13 +169,18 @@ export default function GeographicMap(props: Props) {
         ).addTo(layer)
       }
     }
-    if (replay)
+    if (replay || !scenario.matrix)
       for (const [index, route] of routes.entries()) {
         const ids = [scenario.depot_id, ...route, scenario.depot_id]
         const points = ids.map((id) => scenario.nodes.find((n) => n.id === id)).filter((n) => !!n)
         L.polyline(
           points.map((n) => [n.latitude!, n.longitude!]),
-          { color: color(index), dashArray: '4 8', weight: 2 },
+          {
+            color: color(index),
+            dashArray: '4 8',
+            weight: 2,
+            opacity: focused === null || focused === index ? 0.9 : 0.2,
+          },
         ).addTo(layer)
       }
     const deliveries = scenario.nodes.filter((node) => node.id !== scenario.depot_id)
@@ -215,7 +214,6 @@ export default function GeographicMap(props: Props) {
         current.current.onMove(node.id, Math.max(-85, Math.min(85, point.lat)), point.wrap().lng)
       })
       marker.addTo(layer)
-      // Leaflet's `alt` only labels image icons, not the DOM-backed pins used here.
       marker
         .getElement()
         ?.setAttribute('aria-label', node.name || (depot ? 'Depot' : `Delivery ${deliveryNumber}`))
@@ -228,33 +226,6 @@ export default function GeographicMap(props: Props) {
         fillOpacity: 0.15,
       }).addTo(layer)
   }, [scenario, routes, selected, focused, editable, shapes, geometryKey, candidate, replay])
-
-  async function search(event: React.FormEvent) {
-    event.preventDefault()
-    if (query.trim().length < 2) return
-    searchAbort.current?.abort()
-    const controller = new AbortController()
-    searchAbort.current = controller
-    setSearching(true)
-    setSearchError('')
-    setPlaces([])
-    try {
-      const data = await request<Place[]>(
-        `/places?q=${encodeURIComponent(query.trim())}`,
-        undefined,
-        controller.signal,
-      )
-      if (!controller.signal.aborted) {
-        setPlaces(data)
-        if (!data.length)
-          setSearchError('No places found. Try a city, landmark, or a more specific address.')
-      }
-    } catch (error) {
-      if (!controller.signal.aborted) setSearchError((error as Error).message)
-    } finally {
-      if (!controller.signal.aborted) setSearching(false)
-    }
-  }
 
   function addCandidate(kind: 'depot' | 'delivery') {
     if (!candidate) return
@@ -271,26 +242,20 @@ export default function GeographicMap(props: Props) {
   return (
     <div className="geographic-view">
       <div className="map-toolbar">
-        <form onSubmit={search} className="place-search" role="search">
-          <label className="sr-only" htmlFor="place-query">
-            Search cities, places, or addresses
-          </label>
-          <input
-            id="place-query"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setPlaces([])
-              searchAbort.current?.abort()
-              setSearching(false)
-            }}
-            placeholder="Search an address or place"
-            maxLength={160}
-          />
-          <button className="secondary" disabled={searching || query.trim().length < 2}>
-            {searching ? 'Searching…' : 'Search'}
-          </button>
-        </form>
+        <PlaceSearch
+          getBias={() => {
+            const center = map.current?.getCenter()
+            if (!center || !Number.isFinite(center.lat) || Math.abs(center.lat) > 85) return
+            return { latitude: center.lat, longitude: center.wrap().lng }
+          }}
+          onClear={() => setCandidate(null)}
+          onSelect={(place) => {
+            setCandidate(place)
+            const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+            if (reducedMotion) map.current?.setView([place.latitude, place.longitude], 15)
+            else map.current?.flyTo([place.latitude, place.longitude], 15, { duration: 0.8 })
+          }}
+        />
         <button
           className="quiet"
           onClick={() => {
@@ -300,30 +265,6 @@ export default function GeographicMap(props: Props) {
           Fit stops
         </button>
       </div>
-      {searchError && (
-        <p className="map-message" role="status">
-          {searchError}
-        </p>
-      )}
-      {!!places.length && (
-        <div className="place-results" aria-label="Place search results">
-          {places.map((place, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setCandidate(place)
-                setPlaces([])
-                map.current?.setView([place.latitude, place.longitude], 15)
-              }}
-            >
-              <strong>{place.name}</strong>
-              <small>
-                {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)} ↗
-              </small>
-            </button>
-          ))}
-        </div>
-      )}
       {editable && (
         <div className="map-mode-bar">
           <span>Map tools</span>
@@ -345,7 +286,7 @@ export default function GeographicMap(props: Props) {
       <div
         className="road-map"
         ref={host}
-        aria-label="Interactive delivery map. Search for a place or use map placement controls."
+        aria-label="Interactive delivery map. Scroll to zoom. Search for a place or use map placement controls."
       />
       {editable && candidate && (
         <div className="place-confirm" role="region" aria-label="Selected map place">
@@ -355,10 +296,16 @@ export default function GeographicMap(props: Props) {
               {candidate.latitude.toFixed(5)}, {candidate.longitude.toFixed(5)}
             </small>
           </div>
-          <button className="secondary" onClick={() => addCandidate('depot')}>
+          <button
+            className={mode === 'depot' ? 'primary' : 'secondary'}
+            onClick={() => addCandidate('depot')}
+          >
             Use as depot
           </button>
-          <button className="primary" onClick={() => addCandidate('delivery')}>
+          <button
+            className={mode === 'depot' ? 'secondary' : 'primary'}
+            onClick={() => addCandidate('delivery')}
+          >
             Add delivery
           </button>
           <button
@@ -382,30 +329,25 @@ export default function GeographicMap(props: Props) {
           Select map center
         </button>
       )}
-      {(replay || scenario.matrix) && (
+      {(replay || scenario.matrix || !!routes.length) && (
         <div className="map-caption">
           <span>
             {replay
               ? 'Replay: dashed lines show stop order'
               : scenario.matrix?.road
-                ? `Road data saved ${new Date(scenario.matrix.road.captured_at).toLocaleDateString()} · no live traffic`
+                ? `Road data saved ${new Date(scenario.matrix.road.captured_at).toLocaleDateString()}`
                 : scenario.matrix
                   ? 'Imported travel data · road shapes unavailable'
-                  : ''}
+                  : 'Straight-line travel · dashed lines show stop order'}
           </span>
         </div>
       )}
       <details className="map-sources">
         <summary>Map info &amp; privacy</summary>
+        <p>Map: OpenStreetMap.</p>
         <p>
-          Tiles: OpenStreetMap. Place search: Photon{' '}
-          {configuration.search_public ? 'community service' : 'local service'}. Roads: OSRM{' '}
-          {configuration.public ? 'community service' : 'local service'}.
-        </p>
-        <p>
-          Search text is sent to the configured search service; delivery coordinates are sent to the
-          road service when you solve. Your browser requests visible map tiles. All three services
-          can be self-hosted. Community services support light use and may be unavailable.
+          While you type, searches share your text and approximate map location with the search
+          service. Route calculations share delivery locations with the routing service.
         </p>
       </details>
       {tileError && (

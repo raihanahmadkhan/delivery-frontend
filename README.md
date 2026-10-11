@@ -13,6 +13,10 @@ npm run dev
 
 Open http://localhost:5173. Vite proxies API, event streams, health, and API docs locally. Set `ROUTELAB_API_TARGET` to change the development proxy target. For a separate API origin, set `VITE_API_URL` before building and configure the backend's allowed origins.
 
+Place search suggests addresses after a short typing pause, prioritizes the current map area, and supports mouse or keyboard selection. Selecting a suggestion centers the map; use the depot or delivery action to add it to the route.
+
+Netlify uses `netlify.toml` to run the full frontend check, publish `dist`, and serve the single-page app with security and asset-cache headers. Set `VITE_API_URL` in the Netlify build environment to the backend URL; `.env.example` documents the value. The app remains a shared workspace without sign-in.
+
 ## Build checks
 
 ```sh
@@ -28,7 +32,8 @@ The interface uses minimal neo-brutalism: bold system typography, black borders,
 
 - `src/main.jsx` mounts `src/lab/RouteLab.tsx`.
 - `types.ts` and `api.ts`: contracts, requests, uploads, exports.
-- `GeographicMap.tsx`: lazy-loaded Leaflet, explicit place search, safe text labels, editable stops, road geometry, provider disclosure.
+- `PlaceSearch.tsx`: debounced suggestions, viewport relevance, cancellation, keyboard selection.
+- `GeographicMap.tsx`: lazy-loaded Leaflet, safe text labels, editable stops, road geometry, provider disclosure.
 - `WorkflowControls.tsx`: the four-step planning workflow and secondary scenario/benchmark library.
 - `RouteCanvas.tsx`: fully offline schematic routes, focus, stop inspection.
 - `ResultViews.tsx`: schedules, convergence, comparisons, candidate-move checking, provenance.
@@ -40,4 +45,6 @@ Scenario drafts live in browser storage; saved snapshots and jobs live in the ba
 
 Leaflet is the only mapping runtime, used directly without an additional React wrapper.
 
-See the backend's `docs/RELEASE_AUDIT.md` for test evidence and unresolved container verification. The interface remains a research workbench, not a public-service deployment.
+See the backend's `docs/RELEASE_AUDIT.md` for test evidence and unresolved container verification. Saved routes and job history are shared by all visitors.
+
+ALNS-specific iteration, removal, adaptation, and local-improvement controls are shown only for ALNS. Other methods retain the seed and time cap that they actually consume. Exact reference is limited to eight deliveries. History labels delay repair as onboard sequence repair.

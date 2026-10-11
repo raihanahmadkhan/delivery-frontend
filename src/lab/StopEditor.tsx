@@ -56,7 +56,7 @@ export default function StopEditor({
       )}
       <details className="advanced-settings">
         <summary>Coordinates</summary>
-        <div className="stop-coordinate-fields field-pair">
+        <div className="field-pair">
           {scenario.coordinate_mode === 'geographic' ? (
             <>
               {numeric('latitude', 'Latitude', -90, 90, !!scenario.matrix)}

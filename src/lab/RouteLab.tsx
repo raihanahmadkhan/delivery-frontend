@@ -65,9 +65,6 @@ function Icon({ name }: { name: string }) {
     flask: 'M9 3h6M10 3v6L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2L14 9V3M8 14h8',
     clock: 'M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
     arrow: 'M5 12h14M14 7l5 5-5 5',
-    check: 'M5 12l4 4L19 6',
-    play: 'M8 5l11 7-11 7z',
-    info: 'M12 11v6M12 7h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
   }
   return (
     <svg
@@ -183,6 +180,14 @@ export default function RouteLab() {
   const checkpoint = traceIndex === null ? null : trace[traceIndex]
   const routes = checkpoint?.routes || result?.routes || job?.progress?.routes || []
   const selectedNode = scenario?.nodes.find((node) => node.id === selected)
+  const draftCustomers = draft?.nodes.filter((node) => node.id !== draft.depot_id).length ?? 0
+  const comparisonReady =
+    !!draft &&
+    draft.nodes.some((node) => node.id === draft.depot_id) &&
+    draftCustomers > 0 &&
+    (draft.travel_model !== 'road' ||
+      !!draft.matrix ||
+      (roadConfig.configured && draftCustomers <= (roadConfig.max_customers ?? 25)))
 
   const refreshLists = useCallback(async () => {
     const [history, scenarios] = await Promise.all([
@@ -198,22 +203,26 @@ export default function RouteLab() {
     Promise.all([
       request<{ presets: Preset[] }>('/presets', undefined, controller.signal),
       request<{ algorithms: Algorithm[] }>('/capabilities', undefined, controller.signal),
-      request<MapConfiguration>('/road-status', undefined, controller.signal).catch((err) => {
-        if (err.name === 'AbortError') throw err
-        setError(`Map services: ${err.message}`)
-        return { configured: false } as MapConfiguration
-      }),
+      request<MapConfiguration>('/road-status', undefined, controller.signal)
+        .then((road) => {
+          setRoadConfig(road)
+          return road
+        })
+        .catch((err) => {
+          if (err.name === 'AbortError') throw err
+          setError(`Map services: ${err.message}`)
+          return { configured: false } as MapConfiguration
+        }),
     ])
-      .then(async ([data, capabilities, road]) => {
+      .then(async ([data, capabilities]) => {
         setPresets(data.presets)
         setAvailable(capabilities.algorithms)
-        setRoadConfig(road)
         setConnected(true)
         await refreshLists()
       })
       .catch((err) => {
         if (err.name !== 'AbortError') {
-          setError(`Backend unavailable: ${err.message}. Start the RouteLab API on port 8000.`)
+          setError('Unable to connect to the route service. Please try again in a moment.')
           setConnected(false)
         }
       })
@@ -252,7 +261,14 @@ export default function RouteLab() {
           await refreshLists()
         }
       } catch (err) {
-        if ((err as Error).name !== 'AbortError' && !stopped) setError((err as Error).message)
+        if ((err as Error).name !== 'AbortError' && !stopped) {
+          setError((err as Error).message)
+          if ((err as Error & { status?: number }).status === 404) {
+            history.replaceState(null, '', `${location.pathname}${location.search}`)
+            setJobId(null)
+            setJob(null)
+          }
+        }
       } finally {
         loading = false
       }
@@ -338,6 +354,7 @@ export default function RouteLab() {
   }
 
   function replaceDraft(next: Scenario) {
+    setUndoDraft(null)
     setDraft(next)
     editDraft()
     setMapRevision((v) => v + 1)
@@ -712,8 +729,10 @@ export default function RouteLab() {
                             <strong>{item.name}</strong>
                           </td>
                           <td>
-                            {LABELS[item.algorithm || ''] ||
-                              (item.kind === 'experiment' ? 'Comparison' : item.kind)}
+                            {item.kind === 'replan'
+                              ? LABELS.onboard_repair
+                              : LABELS[item.algorithm || ''] ||
+                                (item.kind === 'experiment' ? 'Comparison' : item.kind)}
                           </td>
                           <td>
                             <span className={`status-pill ${item.status}`}>{item.status}</span>
@@ -758,8 +777,8 @@ export default function RouteLab() {
                 preparing={preparingRoads}
                 road={roadConfig}
                 onNew={() => {
-                  setUndoDraft(draft)
                   replaceDraft(newRoadScenario())
+                  setUndoDraft(draft)
                   setWorkflowStep('places')
                 }}
                 onName={(name) => setDraft((s) => (s ? { ...s, name } : s))}
@@ -832,6 +851,9 @@ export default function RouteLab() {
                           <input
                             type="checkbox"
                             checked={experimentAlgos.includes(a)}
+                            disabled={
+                              a === 'exact' && !experimentAlgos.includes(a) && draftCustomers > 8
+                            }
                             onChange={(e) =>
                               setExperimentAlgos((current) =>
                                 e.target.checked ? [...current, a] : current.filter((x) => x !== a),
@@ -853,13 +875,24 @@ export default function RouteLab() {
                       </span>
                       <button
                         className="primary"
-                        disabled={!draft || submitting || !experimentAlgos.length}
+                        disabled={
+                          !comparisonReady ||
+                          submitting ||
+                          !experimentAlgos.length ||
+                          (experimentAlgos.includes('exact') && draftCustomers > 8)
+                        }
                         onClick={() => launch('experiment')}
                       >
                         <Icon name="flask" />
                         Compare routes
                       </button>
                     </div>
+                    {experimentAlgos.includes('exact') && draftCustomers > 8 && (
+                      <p role="status" className="footnote">
+                        Exact reference supports up to 8 deliveries. Load a smaller route or remove
+                        it from the comparison.
+                      </p>
+                    )}
                   </section>
                 )}
                 {isRunning && (
@@ -953,8 +986,7 @@ export default function RouteLab() {
                             <button
                               className="quiet"
                               onClick={() => {
-                                setDraft({ ...result.scenario, execution: [] })
-                                editDraft()
+                                replaceDraft({ ...result.scenario, execution: [] })
                                 setNotice('Route copied to your draft.')
                               }}
                             >

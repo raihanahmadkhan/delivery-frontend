@@ -1,19 +1,48 @@
-const raw = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
+import type { Scenario } from './types'
+
+const raw = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
 if (raw && !/^https?:\/\//.test(raw)) throw new Error('VITE_API_URL must be an HTTP(S) URL')
 export const API = raw ? (raw.endsWith('/api') ? raw : `${raw}/api`) : '/api'
 
 async function responseData(response: Response) {
+  let data: unknown
   try {
-    return await response.json()
+    data = await response.json()
   } catch {
-    throw new Error(
-      `Server returned HTTP ${response.status} without valid JSON. Check the API connection.`,
+    throw Object.assign(
+      new Error(
+        `Server returned HTTP ${response.status} without valid JSON. Check the API connection.`,
+      ),
+      { status: response.status },
     )
   }
+  if (!response.ok) {
+    const detail = data && typeof data === 'object' && 'detail' in data ? data.detail : null
+    const message = Array.isArray(detail)
+      ? detail
+          .filter((item) => item && typeof item === 'object' && typeof item.msg === 'string')
+          .map((item: { loc?: (string | number)[]; msg: string }) => {
+            const field = Array.isArray(item.loc) ? item.loc.slice(1).join('.') : ''
+            return field ? `${field}: ${item.msg}` : item.msg
+          })
+          .join('; ')
+      : typeof detail === 'string'
+        ? detail
+        : ''
+    throw Object.assign(new Error(message || `Request failed (HTTP ${response.status})`), {
+      status: response.status,
+    })
+  }
+  return data
+}
+
+async function fetchData<T>(path: string, init: RequestInit): Promise<T> {
+  const response = await fetch(`${API}${path}`, init)
+  return (await responseData(response)) as T
 }
 
 export async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
+  return fetchData<T>(path, {
     method: body === undefined ? 'GET' : 'POST',
     signal,
     headers:
@@ -22,31 +51,13 @@ export async function request<T>(path: string, body?: unknown, signal?: AbortSig
         : { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  const data = await responseData(response)
-  if (!response.ok) {
-    const detail = data.detail
-    throw new Error(
-      Array.isArray(detail)
-        ? detail
-            .map(
-              (item: { loc?: (string | number)[]; msg: string }) =>
-                `${item.loc?.slice(1).join('.')}: ${item.msg}`,
-            )
-            .join('; ')
-        : detail || 'Request failed',
-    )
-  }
-  return data as T
 }
 
 export async function upload(file: File) {
   if (file.size > 2 * 1024 * 1024) throw new Error('Scenario files may be at most 2 MB')
   const body = new FormData()
   body.append('file', file)
-  const response = await fetch(`${API}/import`, { method: 'POST', body })
-  const data = await responseData(response)
-  if (!response.ok) throw new Error(data.detail || 'Import failed')
-  return data
+  return fetchData<Scenario>('/import', { method: 'POST', body })
 }
 
 export function download(name: string, value: unknown) {
